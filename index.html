@@ -446,6 +446,120 @@ nav {
 
 .manual-btn:hover { background: rgba(233,169,27,.2); border-color: var(--gold); color: var(--gold); }
 
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.7);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+}
+
+.modal {
+  background: #1a1a1a;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 16px 16px 0 0;
+  padding: 20px 20px 32px;
+  width: 100%;
+  max-width: 600px;
+  animation: slideUp .25s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.modal-title {
+  font-family: "Poppins", sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--white);
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  color: var(--light);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.modal-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.modal-time {
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: "DM Mono", monospace;
+  font-size: 14px;
+  color: var(--white);
+  outline: none;
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.modal-time:focus { border-color: var(--gold); }
+
+.modal-text {
+  flex: 1;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: "DM Sans", sans-serif;
+  font-size: 14px;
+  color: var(--white);
+  outline: none;
+}
+
+.modal-text:focus { border-color: var(--gold); }
+
+.modal-add {
+  background: rgba(255,255,255,.06);
+  border: 1px dashed rgba(255,255,255,.15);
+  border-radius: 8px;
+  padding: 9px;
+  width: 100%;
+  color: var(--light);
+  font-size: 13px;
+  cursor: pointer;
+  font-family: "DM Sans", sans-serif;
+  margin-bottom: 14px;
+  transition: all .2s;
+}
+
+.modal-add:hover { border-color: var(--gold); color: var(--gold); }
+
+.modal-save {
+  background: var(--gold);
+  border: none;
+  border-radius: 8px;
+  padding: 12px;
+  width: 100%;
+  color: var(--dark);
+  font-family: "Poppins", sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all .2s;
+}
+
+.modal-save:hover { background: var(--gold-dark); }
+
 /* Browser warning */
 .warning {
   background: rgba(192,57,43,.15);
@@ -514,7 +628,10 @@ nav {
   <!-- Záznamy -->
   <div class="section-title">
     <span>Záznamy dne</span>
-    <button class="export-btn" onclick="exportCSV()">Export CSV</button>
+    <div style="display:flex;gap:8px;">
+      <button class="export-btn" onclick="otevritModal()">+ Doplnit historii</button>
+      <button class="export-btn" onclick="exportCSV()">Export CSV</button>
+    </div>
   </div>
 
   <div class="zaznamy" id="zaznamy">
@@ -795,8 +912,92 @@ function ulozitEdit(id) {
   renderZaznamy();
 }
 
+// MODAL DOPLNĚNÍ HISTORIE
+let modalRows = [];
+
+function otevritModal() {
+  modalRows = [{ cas: '', text: '' }];
+  renderModalRows();
+  document.getElementById('modal').style.display = 'flex';
+  setTimeout(() => {
+    const first = document.querySelector('.modal-time');
+    if (first) first.focus();
+  }, 100);
+}
+
+function zavritModal() {
+  document.getElementById('modal').style.display = 'none';
+  modalRows = [];
+}
+
+function zavritModalOverlay(e) {
+  if (e.target === document.getElementById('modal')) zavritModal();
+}
+
+function pridatModalRow() {
+  modalRows.push({ cas: '', text: '' });
+  renderModalRows();
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('.modal-time');
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  }, 50);
+}
+
+function renderModalRows() {
+  const container = document.getElementById('modal-rows');
+  container.innerHTML = modalRows.map((r, i) => `
+    <div class="modal-row">
+      <input class="modal-time" type="text" placeholder="08:30"
+        value="${r.cas}" maxlength="5"
+        oninput="modalRows[${i}].cas=this.value"
+        onkeydown="if(event.key==='Tab'&&!event.shiftKey){event.preventDefault();document.querySelectorAll('.modal-text')[${i}].focus();}">
+      <input class="modal-text" type="text" placeholder="Co jste dělali..."
+        value="${r.text}"
+        oninput="modalRows[${i}].text=this.value"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();pridatModalRow();}">
+    </div>
+  `).join('');
+}
+
+function ulozitHistorii() {
+  const platne = modalRows.filter(r => r.cas && r.text.trim());
+  if (!platne.length) { zavritModal(); return; }
+
+  platne.forEach(r => {
+    const parts = r.cas.match(/^(\d{1,2}):(\d{2})$/);
+    if (!parts) return;
+    const d = new Date();
+    d.setHours(parseInt(parts[1]), parseInt(parts[2]), 0, 0);
+    zaznamy.push({
+      id: d.getTime() + Math.random(),
+      cas: r.cas.padStart(5, '0'),
+      timestamp: d.getTime(),
+      text: r.text.trim()
+    });
+  });
+
+  // Seřadit podle času
+  zaznamy.sort((a, b) => a.timestamp - b.timestamp);
+  ulozit();
+  renderZaznamy();
+  zavritModal();
+}
+
 // Init
 renderZaznamy();
 </script>
+<!-- Modal doplnění historie -->
+<div class="modal-overlay" id="modal" style="display:none;" onclick="zavritModalOverlay(event)">
+  <div class="modal">
+    <div class="modal-title">
+      <span>Doplnit historii</span>
+      <button class="modal-close" onclick="zavritModal()">×</button>
+    </div>
+    <div id="modal-rows"></div>
+    <button class="modal-add" onclick="pridatModalRow()">+ Přidat další záznam</button>
+    <button class="modal-save" onclick="ulozitHistorii()">Uložit záznamy</button>
+  </div>
+</div>
+
 </body>
 </html>
